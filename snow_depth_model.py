@@ -69,13 +69,16 @@ def read_Meteo_file(stn,year):
   #Met.drop(['TIME'],inplace = True)
   return Met
 
+Meteo = pd.DataFrame()
 stn = input('STN? (e.g.,500, 502, 505)')
-#year = input('Year? (eg. 2017)')
-Meteo_2016 = read_Meteo_file(stn,'2016')
-Meteo_2017 = read_Meteo_file(stn,'2017')
-Meteo_2018 = read_Meteo_file(stn,'2018')
-## Concatenate 3 years data
-Meteo = pd.concat([Meteo_2016,Meteo_2017,Meteo_2018],axis = 0)
+num_yr = int(input('Number of years?'))
+start_yr = input('Start from year? (eg. 2017)')
+for n in range(num_yr):
+  year = str(int(start_yr)+n)
+  meteo = read_Meteo_file(stn,year)
+  ## Concatenate multiple years data
+  Meteo = pd.concat([Meteo,meteo],axis = 0)
+
 
 ## Compute rolling mean values of air temperature and precipitation of previous week (optional, may be useful for ML models)
 Meteo['AIR_TEMP_mean'] = Meteo['AIR_TEMP'].rolling(7,min_periods=1).mean()
@@ -168,25 +171,19 @@ print(parameters)
 print(C)
 parameters = parameters[0] # Choose the first set in the pool
 
-## 2015-2016 snow season
-snow_on = pd.Timestamp(2015,1,1)
-snow_off = pd.Timestamp(2016,5,15)
-Meteo = SD_calculation(Meteo,snow_on,snow_off,parameters,C)
+#%% Model snowdepth in rest of years
 
-## 2016-2017 snow season
-snow_on = pd.Timestamp(2016,11,1)
-snow_off = pd.Timestamp(2017,5,15)
-Meteo = SD_calculation(Meteo,snow_on,snow_off,parameters,C)
+for n in range(num_yr):
+    year = str(int(start_yr)+n)
+    if year =='2002':
+        snow_on = pd.Timestamp(int(year),1,1)
+        snow_off = pd.Timestamp(int(year)+1,5,15)
+    else:
+        snow_on = pd.Timestamp(int(year),11,1)
+        snow_off = pd.Timestamp(int(year)+1,5,15)
+   
+    Meteo = SD_calculation(Meteo,snow_on,snow_off,parameters,C)
 
-## 2017-2018 snow season
-snow_on = pd.Timestamp(2017,11,1)
-snow_off = pd.Timestamp(2018,5,15)
-Meteo = SD_calculation(Meteo,snow_on,snow_off,parameters,C)
-
-## 2018-2019 snow season
-snow_on = pd.Timestamp(2018,11,1)
-snow_off = pd.Timestamp(2019,5,15)
-Meteo = SD_calculation(Meteo,snow_on,snow_off,parameters,C)
 Meteo.plot(x = 'DATE',y = 'SNOW',figsize = (10,4))
 
 """## Model evaluation (calibrate against 2017-2018 season, validate against 2018-2019 season)"""
@@ -225,6 +222,7 @@ Vars = ['TIME','WIND_SPEED','WIND_DIR','AIR_TEMP','REL_HUM','SOLAR_RAD','LW_RAD_
 prec = 'PRECIP'
 snow = 'SNOW'
 Meteo = Meteo.merge(SD,on = 'DATE',how = 'left')
+## Replace the model values with HRDPS values
 Meteo.loc[np.isnan(Meteo['SD']),'SD'] = Meteo.loc[np.isnan(Meteo['SD']),'SNOW']
 Meteo.drop('SNOW',axis = 1,inplace = True)
 Meteo.rename(columns={'SD':'SNOW'},inplace = True)
@@ -237,7 +235,7 @@ def input_preparation(Met,var,prec,snow):
   file.rename(columns = {prec:'RAIN'},inplace= True)
   return file
 
-#Met = input_preparation(Meteo,Vars,prec,snow)
-#Met.to_csv('Meteo_'+stn+'_2016-2018.csv',index = False,sep = '\t')
+Met = input_preparation(Meteo,Vars,prec,snow)
+Met.to_csv('Meteo_'+stn+'_2002-2018.csv',index = False,sep = '\t')
 os.chdir('..')
 f.savefig('Snow depth model_'+stn+'.png',dpi = 500)
